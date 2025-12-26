@@ -29,8 +29,22 @@ const routes = [
     path: '/register',
     name: 'Register',
     component: () => import('../views/Register.vue') // 👈 必须对应文件名，大小写敏感！
-  }
+  },
+  {
+    path: '/publish',
+    name: 'Publish',
+    // 这里为了复用 Layout 的 Header（显示登录头像），我们建议把它套在 Layout 里
+    // 如果你想全屏显示，可以不套。这里我们选择套 Layout 体验更好。
+    component: () => import('../layout/index.vue'), 
+    children: [
+      {
+        path: '', // 默认子路由，访问 /publish 即可
+        component: () => import('../views/GoodsPublish.vue')
+      }
+    ]
+  },
 ]
+
 
 const router = createRouter({
   history: createWebHistory(),

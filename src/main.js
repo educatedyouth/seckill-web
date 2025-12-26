@@ -1,6 +1,7 @@
 import { createApp } from 'vue'
 import './style.css'
 import App from './App.vue'
+import 'nprogress/nprogress.css' // 引入进度条样式
 
 // 引入 Element Plus
 import ElementPlus from 'element-plus'

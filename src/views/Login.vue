@@ -1,25 +1,42 @@
 <template>
   <div class="login-container">
-    <el-card class="login-card">
-      <template #header>
-        <div class="card-header">
-          <span>商城系统登录 (修复版)</span>
-        </div>
-      </template>
-      <el-form :model="form" label-width="80px">
-        <el-form-item label="用户名">
-          <el-input v-model="form.username" placeholder="请输入用户名/手机号" />
-        </el-form-item>
-        <el-form-item label="密码">
-          <el-input v-model="form.password" type="password" show-password />
+    <div class="login-box">
+      <div class="login-header">
+        <div class="logo">⚡</div>
+        <h2>Seckill Mall</h2>
+        <p>企业级高并发秒杀系统</p>
+      </div>
+      
+      <el-form :model="form" size="large" class="login-form">
+        <el-form-item>
+          <el-input 
+            v-model="form.username" 
+            placeholder="请输入用户名" 
+            :prefix-icon="User"
+            class="glass-input"
+          />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="loading" @click="handleLogin" style="width: 100%">
-            登录
-          </el-button>
+          <el-input 
+            v-model="form.password" 
+            type="password" 
+            placeholder="请输入密码" 
+            :prefix-icon="Lock"
+            show-password
+            class="glass-input"
+          />
         </el-form-item>
+        <el-button type="primary" :loading="loading" @click="handleLogin" class="login-btn">
+          立即登录
+        </el-button>
+        
+        <div class="login-footer">
+          <router-link to="/register">注册账号</router-link>
+          <span>|</span>
+          <a href="#">忘记密码?</a>
+        </div>
       </el-form>
-    </el-card>
+    </div>
   </div>
 </template>
 
@@ -28,31 +45,83 @@ import { reactive, ref } from 'vue'
 import { useUserStore } from '../store/user'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { User, Lock } from '@element-plus/icons-vue' // 需安装图标库
 
 const userStore = useUserStore()
 const router = useRouter()
 const loading = ref(false)
 
-// 2. 修改响应式对象的 key
-const form = reactive({
-  username: '', // ✅ 修正：与后端 LoginVo 保持一致
-  password: ''
-})
+const form = reactive({ username: '', password: '' })
 
 const handleLogin = async () => {
-  // 3. 修改校验逻辑
-  if (!form.username || !form.password) {
-    ElMessage.warning('请输入账号密码')
-    return
-  }
+  if (!form.username || !form.password) return ElMessage.warning('请输入账号密码')
   loading.value = true
-  // 发送给 store 的也是包含 username 的对象
   const success = await userStore.login(form)
   loading.value = false
-  
   if (success) {
-    ElMessage.success('登录成功')
+    ElMessage.success('欢迎回来')
     router.push('/')
   }
 }
 </script>
+
+<style scoped>
+.login-container {
+  height: 100vh;
+  width: 100vw;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.login-box {
+  width: 400px;
+  padding: 40px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px); /* 核心：磨砂效果 */
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  text-align: center;
+  color: white;
+}
+
+.logo {
+  font-size: 48px;
+  margin-bottom: 10px;
+}
+
+.login-header h2 { margin: 10px 0; letter-spacing: 1px; }
+.login-header p { color: rgba(255, 255, 255, 0.8); margin-bottom: 30px; font-size: 14px; }
+
+/* 深度选择器修改 Element 样式以适应透明背景 */
+:deep(.el-input__wrapper) {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  box-shadow: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+}
+:deep(.el-input__inner) { color: white !important; }
+:deep(.el-input__inner::placeholder) { color: rgba(255, 255, 255, 0.7); }
+
+.login-btn {
+  width: 100%;
+  background: linear-gradient(90deg, #ff4d4f, #f5222d);
+  border: none;
+  font-weight: bold;
+  letter-spacing: 2px;
+  margin-top: 20px;
+}
+.login-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 34, 45, 0.5);
+}
+
+.login-footer {
+  margin-top: 20px;
+  font-size: 12px;
+}
+.login-footer a { color: rgba(255, 255, 255, 0.8); text-decoration: none; margin: 0 10px; }
+.login-footer a:hover { color: white; }
+</style>

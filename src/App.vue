@@ -3,5 +3,5 @@
 </template>
 
 <style>
-body { margin: 0; padding: 0; }
+/* 移除所有之前可能写在这里的样式 */
 </style>
