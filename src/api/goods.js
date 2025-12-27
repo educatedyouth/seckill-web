@@ -17,11 +17,20 @@ export function saveGoods(data) {
   })
 }
 
-// 3. 获取商品详情 (用于后续详情页)
-// 注意：这个接口虽然我们后端还没写(步骤2.3提到要写但可能没写全)，先预留在这里
-export function getGoodsDetail(skuId) {
+
+// 获取商品详情 (聚合数据)
+export function getGoodsDetail(spuId) {
   return request({
-    url: `/goods/detail/${skuId}`,
+    url: `/goods/detail/${spuId}`,
     method: 'get'
+  })
+}
+
+// 获取商品分页列表
+export function getGoodsList(params) {
+  return request({
+    url: '/goods/list',
+    method: 'get',
+    params // 会自动序列化为 ?page=1&size=10
   })
 }

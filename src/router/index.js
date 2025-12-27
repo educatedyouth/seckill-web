@@ -43,6 +43,12 @@ const routes = [
       }
     ]
   },
+  {
+    path: '/goods/:id', // 动态路由
+    name: 'GoodsDetail',
+    component: () => import('../views/GoodsDetail.vue'), // 我们马上要建这个文件
+    meta: { title: '商品详情' }
+  },
 ]
 
 
