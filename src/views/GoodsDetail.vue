@@ -7,14 +7,28 @@
       </div>
 
       <div class="main-content">
-        <div class="image-box">
-          <img src="https://via.placeholder.com/400" alt="商品主图" />
+        <div class="image-section">
+          <div class="main-image-box">
+            <img :src="displayImg || 'https://via.placeholder.com/400?text=No+Image'" alt="商品主图" />
+          </div>
+          
+          <div class="sku-gallery" v-if="currentSkuImages && currentSkuImages.length > 0">
+            <div 
+              v-for="(imgObj, index) in currentSkuImages" 
+              :key="imgObj.id"
+              class="thumb-item"
+              :class="{ 'active': displayImg === imgObj.imgUrl }"
+              @click="setDisplayImg(imgObj.imgUrl)"
+            >
+              <img :src="imgObj.imgUrl" alt="缩略图" />
+            </div>
+          </div>
         </div>
 
         <div class="sku-box">
           <div class="price-row">
             <span class="currency">¥</span>
-            <span class="price">{{ currentSku ? currentSku.price : '请选择' }}</span>
+            <span class="price">{{ currentSku ? currentSku.price : '---' }}</span>
           </div>
 
           <div v-for="(group, index) in specGroups" :key="index" class="spec-row">
@@ -47,19 +61,15 @@
     </el-card>
 
     <el-card class="debug-card" style="margin-top: 20px;">
-      <template #header>后端返回的原始 SKU 列表 (Debug)</template>
-      <el-table :data="skuList" border style="width: 100%">
-        <el-table-column prop="skuId" label="SKU ID" width="180" />
-        <el-table-column prop="skuName" label="名称" />
-        <el-table-column prop="price" label="价格" width="100" />
-        <el-table-column prop="stock" label="库存" width="100" />
-      </el-table>
+      <template #header>调试面板</template>
+      <p>当前选中的规格: {{ selectedSpecs }}</p>
+      <p>当前匹配的 SKU: {{ currentSku ? currentSku.skuName : 'None' }}</p>
     </el-card>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getGoodsDetail } from '../api/goods'
 import { ElMessage } from 'element-plus'
@@ -68,10 +78,14 @@ const route = useRoute()
 const spuInfo = ref({})
 const skuList = ref([])
 
-// 用户当前选中的规格状态，Map结构: {"颜色": "雅川青", "版本": "512GB"}
-const selectedSpecs = ref({})
+// 页面当前展示的主图 URL
+const displayImg = ref('')
+// 当前展示的缩略图列表
+const currentSkuImages = ref([])
 
-// 1. 初始化加载
+const selectedSpecs = ref({})
+const specGroups = ref([])
+
 onMounted(async () => {
   const spuId = route.params.id
   if (!spuId) {
@@ -86,9 +100,16 @@ const loadData = async (id) => {
     const res = await getGoodsDetail(id)
     if (res.code === 200) {
       spuInfo.value = res.data.spuInfo
-      skuList.value = res.data.skuList
-      // 初始化规格提取算法
-      extractSpecs(res.data.skuList)
+      skuList.value = res.data.skuList || []
+      
+      // 默认图片策略：如果SPU有图显示SPU图，否则显示列表第一个SKU的图作为兜底
+      if (spuInfo.value.spuImg) {
+        displayImg.value = spuInfo.value.spuImg
+      } else if (skuList.value.length > 0) {
+        displayImg.value = skuList.value[0].skuDefaultImg
+      }
+
+      extractSpecs(skuList.value)
     } else {
       ElMessage.error(res.message || '加载失败')
     }
@@ -98,15 +119,9 @@ const loadData = async (id) => {
   }
 }
 
-// === 核心算法区域 ===
-
-// 规格组，格式：[ {name: "颜色", values: ["红","蓝"]}, {name: "内存", values: ["64G"]} ]
-const specGroups = ref([])
-
-// 算法：从扁平的 SKU 列表中提取出有哪些规格名和规格值
+// === 核心算法：规格提取 ===
 const extractSpecs = (list) => {
-  const groups = new Map() // 使用 Map 暂存: "颜色" -> Set("红", "蓝")
-  
+  const groups = new Map()
   list.forEach(sku => {
     if (sku.saleAttrValues) {
       sku.saleAttrValues.forEach(attr => {
@@ -117,8 +132,6 @@ const extractSpecs = (list) => {
       })
     }
   })
-
-  // 转成数组格式供 template 渲染
   const result = []
   groups.forEach((valueSet, key) => {
     result.push({
@@ -129,9 +142,8 @@ const extractSpecs = (list) => {
   specGroups.value = result
 }
 
-// 用户点击规格按钮
+// === 交互逻辑 ===
 const selectSpec = (name, value) => {
-  // 如果点击已选中的，则取消选中
   if (selectedSpecs.value[name] === value) {
     delete selectedSpecs.value[name]
   } else {
@@ -139,27 +151,41 @@ const selectSpec = (name, value) => {
   }
 }
 
-// 判断按钮是否高亮
 const isSelected = (name, value) => {
   return selectedSpecs.value[name] === value
 }
 
-// 计算属性：根据当前选中的规格，查找对应的 SKU
+// 计算当前匹配的 SKU
 const currentSku = computed(() => {
-  // 必须所有规格都选了才开始匹配
   if (Object.keys(selectedSpecs.value).length < specGroups.value.length) {
     return null
   }
-
-  // 遍历所有 SKU，看谁的属性完全匹配当前 selectedSpecs
   return skuList.value.find(sku => {
-    // 检查这个 SKU 的每个属性是否都在 selectedSpecs 里匹配
-    // 这里做了一个简化假设：SKU的属性数量和规格组数量一致
     return sku.saleAttrValues.every(attr => {
       return selectedSpecs.value[attr.attrName] === attr.attrValue
     })
   })
 })
+
+// === 关键：监听 SKU 变化，切换图片 ===
+watch(currentSku, (newSku) => {
+  if (newSku) {
+    // 1. 切换主图为该 SKU 的默认图
+    if (newSku.skuDefaultImg) {
+      displayImg.value = newSku.skuDefaultImg
+    }
+    // 2. 更新相册列表
+    currentSkuImages.value = newSku.images || []
+  } else {
+    // 如果用户取消了某个规格导致匹配失效，这里可以选择重置，或者保持最后一张图
+    // currentSkuImages.value = []
+  }
+})
+
+// 手动点击缩略图切换主图
+const setDisplayImg = (url) => {
+  displayImg.value = url
+}
 
 </script>
 
@@ -169,33 +195,82 @@ const currentSku = computed(() => {
   max-width: 1000px;
   margin: 0 auto;
 }
+.header {
+  margin-bottom: 20px;
+}
 .title {
   font-size: 24px;
   font-weight: bold;
-  margin-bottom: 10px;
 }
 .subtitle {
   color: #999;
-  margin-bottom: 20px;
 }
+
 .main-content {
   display: flex;
   gap: 30px;
 }
-.image-box img {
-  width: 300px;
-  height: 300px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid #eee;
+
+/* 左侧图片区布局 */
+.image-section {
+  width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
+.main-image-box {
+  width: 400px;
+  height: 400px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.main-image-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* 保证图片填满且不变形 */
+}
+
+/* 缩略图画廊 */
+.sku-gallery {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 5px;
+}
+.thumb-item {
+  width: 60px;
+  height: 60px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.thumb-item.active {
+  border: 2px solid #409EFF; /* 选中高亮 */
+}
+.thumb-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 右侧SKU区 */
 .sku-box {
   flex: 1;
 }
 .price-row {
   color: #f56c6c;
-  font-size: 24px;
+  font-size: 28px;
+  font-weight: bold;
   margin-bottom: 20px;
+}
+.currency {
+  font-size: 18px;
+  margin-right: 4px;
 }
 .spec-row {
   margin-bottom: 15px;
@@ -208,16 +283,19 @@ const currentSku = computed(() => {
 .spec-values {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
 }
 .stock-row {
   margin-top: 20px;
-  color: #666;
+  color: #999;
   font-size: 14px;
 }
 .sku-id-tag {
   margin-left: 10px;
+  padding: 2px 6px;
+  background: #f0f2f5;
+  border-radius: 4px;
   font-size: 12px;
-  color: #ccc;
 }
 .action-btn {
   margin-top: 30px;
