@@ -15,6 +15,7 @@
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item command="productManager">📦 商品管理</el-dropdown-item>
                   <el-dropdown-item command="order">我的订单</el-dropdown-item>
                   <el-dropdown-item command="address">收货地址</el-dropdown-item>
                   <el-dropdown-item divided command="logout" style="color: #ff4d4f">退出登录</el-dropdown-item>
@@ -58,14 +59,6 @@
           </div>
         </div>
 
-        <div class="cart-area">
-          <el-badge :value="0" class="item">
-            <el-button round size="large">
-              <el-icon style="margin-right: 5px"><ShoppingCart /></el-icon>
-              我的购物车
-            </el-button>
-          </el-badge>
-        </div>
         <div class="cart-area">
           <el-button 
             type="success" 
@@ -130,12 +123,12 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useUserStore } from '../store/user'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, ShoppingCart } from '@element-plus/icons-vue'
+import { ArrowDown, ShoppingCart, Upload } from '@element-plus/icons-vue' // 引入 Upload 图标
 
 const keyword = ref('')
 const userStore = useUserStore()
 const router = useRouter()
-const isFixed = ref(false) // 控制头部吸顶
+const isFixed = ref(false)
 
 // 监听滚动实现吸顶效果
 const handleScroll = () => {
@@ -151,11 +144,17 @@ const handleSearch = () => {
   ElMessage.info(`搜索: ${keyword.value}`)
 }
 
+// 下拉菜单指令处理
 const handleCommand = async (command) => {
   if (command === 'logout') {
     await userStore.logout()
     ElMessage.success('已安全退出')
     setTimeout(() => location.reload(), 500)
+  } else if (command === 'address') {
+    router.push('/user/address')
+  } else if (command === 'productManager') {
+    // 【新增】跳转到商品管理页
+    router.push('/product/manager')
   } else {
     ElMessage.info('功能开发中...')
   }
@@ -166,7 +165,7 @@ const handleCommand = async (command) => {
 /* --- Top Navigation --- */
 .top-nav {
   height: 32px;
-  background: #333; /* 深色顶条 */
+  background: #333;
   color: #ccc;
   font-size: 12px;
   line-height: 32px;
@@ -191,12 +190,11 @@ const handleCommand = async (command) => {
   transition: all 0.3s;
   z-index: 999;
 }
-/* 吸顶样式 */
 .fixed-header {
   position: fixed;
   top: 0;
   width: 100%;
-  height: 70px; /* 吸顶变矮 */
+  height: 70px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
   animation: slideDown 0.3s ease;
 }
@@ -221,7 +219,7 @@ const handleCommand = async (command) => {
 .logo-text h1 { margin: 0; font-size: 22px; color: #333; line-height: 1.2; }
 .sub-text { font-size: 12px; color: #999; letter-spacing: 1px; }
 
-/* Search Bar (Custom CSS for better look) */
+/* Search Bar */
 .search-area { flex: 1; max-width: 600px; margin: 0 40px; }
 .search-box { display: flex; border: 2px solid var(--mall-brand-color); border-radius: 24px; overflow: hidden; height: 40px; }
 .search-box input {
@@ -236,9 +234,12 @@ const handleCommand = async (command) => {
 .hot-words span { margin-right: 15px; cursor: pointer; }
 .hot-words span:hover { color: var(--mall-brand-color); }
 
+/* --- Cart Area --- */
+.cart-area { display: flex; align-items: center; }
+
 /* --- Main Content --- */
 .app-main {
-  min-height: calc(100vh - 300px); /* 保证内容少时footer沉底 */
+  min-height: calc(100vh - 300px);
   padding: 20px 0;
   margin-top: 0; 
 }

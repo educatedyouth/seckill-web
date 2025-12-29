@@ -1,56 +1,59 @@
 import { createRouter, createWebHistory } from 'vue-router'
-// 引入刚刚写的 Layout
 import Layout from '../layout/index.vue'
 
 const routes = [
-  // 1. 业务路由组：套用 Layout 布局
+  // 1. 业务路由组：套用 Layout 布局 (有顶栏和底栏)
   {
     path: '/',
     component: Layout,
     redirect: '/home',
     children: [
       {
-        path: 'home', // 访问 /home
+        path: 'home',
         name: 'Home',
         component: () => import('../views/Home.vue')
+      },
+      {
+        path: 'goods/:id',
+        name: 'GoodsDetail',
+        component: () => import('../views/GoodsDetail.vue'),
+        meta: { title: '商品详情' }
+      },
+      // 【新增】用户地址管理
+      {
+        path: 'user/address',
+        name: 'UserAddress',
+        component: () => import('../views/UserAddress.vue'), // 稍后创建
+        meta: { title: '收货地址' }
+      },
+      // 【新增】商品管理列表页 (放在 Layout 里，这就有了头部和底部)
+      {
+        path: 'product/manager',
+        name: 'ProductManager',
+        component: () => import('../views/ProductManager.vue'),
+        meta: { title: '商品管理' }
       }
-      // 未来还要加：商品详情页、订单结算页...
     ]
   },
   
-  // 2. 独立路由组：全屏显示，不套 Layout
+  // 2. 独立路由组：全屏显示
   {
     path: '/login',
     name: 'Login',
     component: () => import('../views/Login.vue')
   },
-  // 确保这一段存在，且路径没有拼写错误
   {
     path: '/register',
     name: 'Register',
-    component: () => import('../views/Register.vue') // 👈 必须对应文件名，大小写敏感！
+    component: () => import('../views/Register.vue')
   },
+  // 【修改】发布页独立，不再套用通用 Layout，解决“购物车栏目丑陋”的问题
   {
     path: '/publish',
     name: 'Publish',
-    // 这里为了复用 Layout 的 Header（显示登录头像），我们建议把它套在 Layout 里
-    // 如果你想全屏显示，可以不套。这里我们选择套 Layout 体验更好。
-    component: () => import('../layout/index.vue'), 
-    children: [
-      {
-        path: '', // 默认子路由，访问 /publish 即可
-        component: () => import('../views/GoodsPublish.vue')
-      }
-    ]
-  },
-  {
-    path: '/goods/:id', // 动态路由
-    name: 'GoodsDetail',
-    component: () => import('../views/GoodsDetail.vue'), // 我们马上要建这个文件
-    meta: { title: '商品详情' }
-  },
+    component: () => import('../views/GoodsPublish.vue') 
+  }
 ]
-
 
 const router = createRouter({
   history: createWebHistory(),
