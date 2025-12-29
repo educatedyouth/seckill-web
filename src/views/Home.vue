@@ -19,9 +19,9 @@
           shadow="hover"
         >
           <div class="image-placeholder">
-            <span class="tag">热销</span>
+            <img v-if="item.spuImg" :src="item.spuImg" style="width: 100%; height: 100%; object-fit: cover;" />
+            <span v-else class="tag">暂无图片</span>
           </div>
-          
           <div class="goods-info">
             <h3 class="goods-title">{{ item.spuName }}</h3>
             <p class="goods-desc">{{ item.spuDescription }}</p>

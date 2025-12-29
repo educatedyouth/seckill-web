@@ -13,6 +13,20 @@
           <el-input v-model="form.spuName" placeholder="例如：iPhone 15 Pro Max" />
         </el-form-item>
 
+        <el-form-item label="商品主图" required>
+          <el-upload
+            class="avatar-uploader"
+            action="#"
+            :http-request="handleSpuUpload" 
+            :show-file-list="false"
+            :before-upload="beforeAvatarUpload"
+          >
+            <img v-if="form.spuImg" :src="form.spuImg" class="sku-img" style="width: 100px; height: 100px;"/>
+            <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
+          </el-upload>
+          <div style="font-size: 12px; color: #999; margin-left: 10px;">这将作为列表页展示的封面图</div>
+        </el-form-item>
+
         <el-form-item label="商品描述">
           <el-input v-model="form.spuDescription" type="textarea" placeholder="请输入商品详细描述..." />
         </el-form-item>
@@ -73,7 +87,16 @@
                <el-tag type="info">规格参数：</el-tag>
                <el-input v-model="sku.color" placeholder="颜色 (如: 红色)" size="small" style="width: 120px; margin: 0 5px"/>
                <el-input v-model="sku.memory" placeholder="内存 (如: 128G)" size="small" style="width: 120px; margin: 0 5px"/>
-               <el-input v-model="sku.images[0]" placeholder="图片URL" size="small" style="width: 200px"/>
+               <el-upload
+                class="avatar-uploader"
+                action="#" 
+                :http-request="(options) => handleUpload(options, index)"
+                :show-file-list="false"
+                :before-upload="beforeAvatarUpload"
+              >
+                <img v-if="sku.images[0]" :src="sku.images[0]" class="sku-img" />
+                <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
+              </el-upload>
             </div>
           </div>
         </div>
@@ -93,7 +116,8 @@ import { ref, reactive, onMounted } from 'vue'
 import { getCategoryTree, saveGoods } from '../api/goods'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-
+import { Upload, Plus } from '@element-plus/icons-vue' // 引入图标
+import { uploadFile } from '../api/oss' // 引入刚才写的 API
 const router = useRouter()
 const submitting = ref(false)
 const categoryOptions = ref([])
@@ -102,6 +126,7 @@ const selectedCategory = ref([]) // 级联选择绑定的数组
 // 表单数据模型 (对应后端 SpuSaveDTO)
 const form = reactive({
   spuName: '',
+  spuImg: '', 
   spuDescription: '',
   categoryId: null,
   brandId: 1,
@@ -126,7 +151,53 @@ onMounted(async () => {
     categoryOptions.value = res.data
   }
 })
+// 【新增】专门处理 SPU 主图上传的方法
+const handleSpuUpload = async (options) => {
+  const file = options.file
+  try {
+    const res = await uploadFile(file)
+    if (res.code === 200) {
+      // 核心：把返回的 URL 赋值给 form.spuImg
+      form.spuImg = res.data
+      ElMessage.success('主图上传成功')
+    } else {
+      ElMessage.error('上传失败')
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('上传出错')
+  }
+}
+// 自定义上传逻辑
+const handleUpload = async (options, skuIndex) => {
+  const file = options.file
+  try {
+    const res = await uploadFile(file)
+    if (res.code === 200) {
+      // 上传成功，回显图片 URL 到对应的 SKU 数据中
+      // 注意：后端返回的是 res.data (字符串URL)
+      form.skus[skuIndex].images[0] = res.data
+      ElMessage.success('图片上传成功')
+    } else {
+      ElMessage.error('上传失败')
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('上传出错')
+  }
+}
 
+// 上传前校验 (可选：限制大小和格式)
+const beforeAvatarUpload = (rawFile) => {
+  if (rawFile.type !== 'image/jpeg' && rawFile.type !== 'image/png') {
+    ElMessage.error('图片必须是 JPG 或 PNG 格式!')
+    return false
+  } else if (rawFile.size / 1024 / 1024 > 2) {
+    ElMessage.error('图片大小不能超过 2MB!')
+    return false
+  }
+  return true
+}
 // 分类选择回调
 const handleCategoryChange = (val) => {
   if (val && val.length > 0) {
@@ -247,5 +318,31 @@ const submitForm = async () => {
 .form-footer {
   margin-top: 40px;
   text-align: center;
+}
+.avatar-uploader {
+  display: inline-block;
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  width: 60px;
+  height: 60px;
+  line-height: 60px;
+  text-align: center;
+  margin-left: 10px;
+}
+.avatar-uploader:hover {
+  border-color: #409EFF;
+}
+.sku-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.avatar-uploader-icon {
+  font-size: 20px;
+  color: #8c939d;
 }
 </style>
