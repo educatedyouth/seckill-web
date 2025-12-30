@@ -38,6 +38,7 @@
                 v-for="val in group.values"
                 :key="val"
                 :type="isSelected(group.name, val) ? 'primary' : ''"
+                :disabled="isSpecDisabled(group.name, val)"
                 @click="selectSpec(group.name, val)"
                 size="small"
               >
@@ -78,9 +79,7 @@ const route = useRoute()
 const spuInfo = ref({})
 const skuList = ref([])
 
-// 页面当前展示的主图 URL
 const displayImg = ref('')
-// 当前展示的缩略图列表
 const currentSkuImages = ref([])
 
 const selectedSpecs = ref({})
@@ -100,9 +99,24 @@ const loadData = async (id) => {
     const res = await getGoodsDetail(id)
     if (res.code === 200) {
       spuInfo.value = res.data.spuInfo
-      skuList.value = res.data.skuList || []
+      // 【修复点】这里必须先定义 originSkuList
+      const originSkuList = res.data.skuList || []
       
-      // 默认图片策略：如果SPU有图显示SPU图，否则显示列表第一个SKU的图作为兜底
+      // === 【优化开始】预处理 SKU 数据 ===
+      // 我们不仅保存原始数据，还给每个 SKU 加一个 "外挂" map
+      // 以后查属性不用遍历数组，直接 sku._specMap['颜色'] 就能拿到 '红色'
+      skuList.value = originSkuList.map(sku => {
+        const map = {}
+        if (sku.saleAttrValues) {
+          sku.saleAttrValues.forEach(attr => {
+            map[attr.attrName] = attr.attrValue
+          })
+        }
+        return {
+          ...sku,
+          _specMap: map // 挂载这个 map，前缀 _ 表示这是前端生成的辅助字段
+        }
+      })
       if (spuInfo.value.spuImg) {
         displayImg.value = spuInfo.value.spuImg
       } else if (skuList.value.length > 0) {
@@ -119,7 +133,6 @@ const loadData = async (id) => {
   }
 }
 
-// === 核心算法：规格提取 ===
 const extractSpecs = (list) => {
   const groups = new Map()
   list.forEach(sku => {
@@ -142,7 +155,6 @@ const extractSpecs = (list) => {
   specGroups.value = result
 }
 
-// === 交互逻辑 ===
 const selectSpec = (name, value) => {
   if (selectedSpecs.value[name] === value) {
     delete selectedSpecs.value[name]
@@ -155,7 +167,34 @@ const isSelected = (name, value) => {
   return selectedSpecs.value[name] === value
 }
 
-// 计算当前匹配的 SKU
+// === 【修改点 2】核心判读逻辑 ===
+// 判断某个选项是否应该被禁用（即：选了它之后，是否会导致无货或无组合）
+const isSpecDisabled = (specName, specValue) => {
+  // 1. 如果该选项已经被选中，那肯定不禁用
+  if (selectedSpecs.value[specName] === specValue) return false
+
+  // 2. 构造一个“假设选中”的规格对象
+  // 也就是说：保持其他行的选中状态不变，把当前行（specName）的值换成 specValue
+  const tempSpecs = { ...selectedSpecs.value }
+  tempSpecs[specName] = specValue
+
+  // 3. 去 skuList 里搜寻，是否存在满足 tempSpecs 所有条件的 SKU
+  // 并且该 SKU 的库存必须 > 0
+  const hasValidSku = skuList.value.some(sku => {
+    // 检查此 SKU 是否包含 tempSpecs 里所有的键值对
+    const match = Object.entries(tempSpecs).every(([key, val]) => {
+      // 直接 O(1) 读取！性能提升明显
+      return sku._specMap[key] === val
+    })
+    
+    // 只有匹配且有库存才算“有效路径”
+    return match && sku.stock > 0
+  })
+
+  // 如果找不到有效路径，就禁用
+  return !hasValidSku
+}
+
 const currentSku = computed(() => {
   if (Object.keys(selectedSpecs.value).length < specGroups.value.length) {
     return null
@@ -167,137 +206,40 @@ const currentSku = computed(() => {
   })
 })
 
-// === 关键：监听 SKU 变化，切换图片 ===
 watch(currentSku, (newSku) => {
   if (newSku) {
-    // 1. 切换主图为该 SKU 的默认图
     if (newSku.skuDefaultImg) {
       displayImg.value = newSku.skuDefaultImg
     }
-    // 2. 更新相册列表
     currentSkuImages.value = newSku.images || []
-  } else {
-    // 如果用户取消了某个规格导致匹配失效，这里可以选择重置，或者保持最后一张图
-    // currentSkuImages.value = []
   }
 })
 
-// 手动点击缩略图切换主图
 const setDisplayImg = (url) => {
   displayImg.value = url
 }
-
 </script>
 
 <style scoped>
-.goods-detail-container {
-  padding: 20px;
-  max-width: 1000px;
-  margin: 0 auto;
-}
-.header {
-  margin-bottom: 20px;
-}
-.title {
-  font-size: 24px;
-  font-weight: bold;
-}
-.subtitle {
-  color: #999;
-}
-
-.main-content {
-  display: flex;
-  gap: 30px;
-}
-
-/* 左侧图片区布局 */
-.image-section {
-  width: 400px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.main-image-box {
-  width: 400px;
-  height: 400px;
-  border: 1px solid #eee;
-  border-radius: 4px;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.main-image-box img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover; /* 保证图片填满且不变形 */
-}
-
-/* 缩略图画廊 */
-.sku-gallery {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 5px;
-}
-.thumb-item {
-  width: 60px;
-  height: 60px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.thumb-item.active {
-  border: 2px solid #409EFF; /* 选中高亮 */
-}
-.thumb-item img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-/* 右侧SKU区 */
-.sku-box {
-  flex: 1;
-}
-.price-row {
-  color: #f56c6c;
-  font-size: 28px;
-  font-weight: bold;
-  margin-bottom: 20px;
-}
-.currency {
-  font-size: 18px;
-  margin-right: 4px;
-}
-.spec-row {
-  margin-bottom: 15px;
-}
-.spec-name {
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 8px;
-}
-.spec-values {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.stock-row {
-  margin-top: 20px;
-  color: #999;
-  font-size: 14px;
-}
-.sku-id-tag {
-  margin-left: 10px;
-  padding: 2px 6px;
-  background: #f0f2f5;
-  border-radius: 4px;
-  font-size: 12px;
-}
-.action-btn {
-  margin-top: 30px;
-}
+.goods-detail-container { padding: 20px; max-width: 1000px; margin: 0 auto; }
+.header { margin-bottom: 20px; }
+.title { font-size: 24px; font-weight: bold; }
+.subtitle { color: #999; }
+.main-content { display: flex; gap: 30px; }
+.image-section { width: 400px; display: flex; flex-direction: column; gap: 10px; }
+.main-image-box { width: 400px; height: 400px; border: 1px solid #eee; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.main-image-box img { width: 100%; height: 100%; object-fit: cover; }
+.sku-gallery { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px; }
+.thumb-item { width: 60px; height: 60px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; flex-shrink: 0; }
+.thumb-item.active { border: 2px solid #409EFF; }
+.thumb-item img { width: 100%; height: 100%; object-fit: cover; }
+.sku-box { flex: 1; }
+.price-row { color: #f56c6c; font-size: 28px; font-weight: bold; margin-bottom: 20px; }
+.currency { font-size: 18px; margin-right: 4px; }
+.spec-row { margin-bottom: 15px; }
+.spec-name { font-size: 14px; color: #666; margin-bottom: 8px; }
+.spec-values { display: flex; gap: 10px; flex-wrap: wrap; }
+.stock-row { margin-top: 20px; color: #999; font-size: 14px; }
+.sku-id-tag { margin-left: 10px; padding: 2px 6px; background: #f0f2f5; border-radius: 4px; font-size: 12px; }
+.action-btn { margin-top: 30px; }
 </style>
