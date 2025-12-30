@@ -13,16 +13,16 @@
       <div class="form-card">
         <div class="card-header">
           <h2>{{ isEditMode ? '🛠️ 编辑商品' : '🔥 商品发布中心' }}</h2>
-          <span class="subtitle">SPU/SKU 统一录入管理</span>
+          <span class="subtitle">支持动态规格配置的企业级发布台</span>
         </div>
 
         <el-form :model="form" ref="formRef" label-width="100px" class="goods-form">
-          <h3 class="section-title">1. SPU 基础信息</h3>
           
+          <h3 class="section-title">1. SPU 基础信息</h3>
           <el-row :gutter="40">
             <el-col :span="16">
               <el-form-item label="商品名称" required>
-                <el-input v-model="form.spuName" placeholder="例如：华为 Mate 60 Pro" />
+                <el-input v-model="form.spuName" placeholder="例如：Nike Air Force 1 / 华为 Mate 60" />
               </el-form-item>
               <el-form-item label="商品描述">
                 <el-input v-model="form.spuDescription" type="textarea" :rows="3" placeholder="请输入商品详细卖点..." />
@@ -60,8 +60,26 @@
           
           <el-row :gutter="20">
             <el-col :span="8">
-              <el-form-item label="品牌ID">
-                 <el-input-number v-model="form.brandId" :min="1" style="width: 100%"/>
+              <el-form-item label="商品品牌" required>
+                <el-select 
+                  v-model="form.brandId" 
+                  placeholder="输入关键词搜索或直接回车创建" 
+                  style="width: 100%" 
+                  filterable
+                  remote
+                  :remote-method="remoteMethod"
+                  :loading="brandLoading"
+                  allow-create
+                  default-first-option
+                  @change="handleBrandChange"
+                >
+                  <el-option 
+                    v-for="b in brandOptions" 
+                    :key="b.id" 
+                    :label="b.name" 
+                    :value="b.id" 
+                  />
+                </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="8">
@@ -76,56 +94,99 @@
             </el-col>
           </el-row>
 
+          <h3 class="section-title">
+            2. SKU 规格配置
+            <div class="subtitle-tip">（输入规格名如“颜色”、“尺寸”后回车，即可为表格添加新列）</div>
+          </h3>
+          
+          <div class="spec-setting-area">
+            <el-tag
+              v-for="(tag, index) in dynamicSpecs"
+              :key="tag"
+              closable
+              :disable-transitions="false"
+              @close="handleCloseSpec(index)"
+              size="large"
+              effect="dark"
+              style="margin-right: 10px"
+            >
+              {{ tag }}
+            </el-tag>
+            <el-input
+              v-if="inputVisible"
+              ref="InputRef"
+              v-model="inputValue"
+              class="input-new-tag"
+              size="small"
+              @keyup.enter="handleInputConfirm"
+              @blur="handleInputConfirm"
+              placeholder="输入规格名回车"
+            />
+            <el-button v-else class="button-new-tag" size="small" @click="showInput">
+              + 新增规格维度
+            </el-button>
+          </div>
+
           <div class="sku-section">
-            <h3 class="section-title">
-              2. SKU 规格列表 (支持多图)
-              <el-button type="primary" size="small" @click="addSkuRow" class="add-btn">+ 添加 SKU</el-button>
-            </h3>
-
-            <div v-for="(sku, index) in form.skus" :key="index" class="sku-card">
-              <div class="sku-header">
-                <span class="tag">SKU #{{ index + 1 }}</span>
-                <el-button type="danger" link @click="removeSkuRow(index)" v-if="form.skus.length > 1">删除此规格</el-button>
-              </div>
-              
-              <el-row :gutter="15">
-                <el-col :span="8">
-                  <el-input v-model="sku.skuName" placeholder="组合名称 (如: 雅川青 512G)">
-                    <template #prepend>名称</template>
-                  </el-input>
-                </el-col>
-                <el-col :span="8">
-                  <el-input v-model="sku.price" type="number" placeholder="0.00">
-                    <template #prepend>价格</template>
-                  </el-input>
-                </el-col>
-                <el-col :span="8">
-                  <el-input v-model="sku.stock" type="number" placeholder="0">
-                    <template #prepend>库存</template>
-                  </el-input>
-                </el-col>
-              </el-row>
-
-              <div class="attr-row">
-                 <div class="label">销售属性：</div>
-                 <el-input v-model="sku.color" placeholder="颜色 (如: 雅川青)" size="small" style="width: 140px; margin-right: 10px"/>
-                 <el-input v-model="sku.memory" placeholder="版本 (如: 512GB)" size="small" style="width: 140px; margin-right: 10px"/>
-              </div>
-
-              <div class="image-row">
-                <div class="label">SKU 相册：</div>
-                <el-upload
-                  v-model:file-list="sku.fileList"
-                  action="#" 
-                  list-type="picture-card"
-                  :http-request="(options) => handleSkuUpload(options, index)"
-                  :before-upload="beforeAvatarUpload"
-                  :on-remove="(file) => handleRemove(file, index)"
-                >
-                  <el-icon><Plus /></el-icon>
-                </el-upload>
-              </div>
+            <div class="sku-actions">
+              <el-button type="primary" size="small" @click="addSkuRow" plain>+ 添加一行 SKU</el-button>
             </div>
+
+            <el-table :data="form.skus" border style="width: 100%">
+              <el-table-column label="组合名称" width="180">
+                <template #default="scope">
+                  <el-input v-model="scope.row.skuName" placeholder="如: 红色 XL" size="small"/>
+                </template>
+              </el-table-column>
+              
+              <el-table-column label="价格 (元)" width="120">
+                <template #default="scope">
+                  <el-input v-model="scope.row.price" type="number" size="small"/>
+                </template>
+              </el-table-column>
+              
+              <el-table-column label="库存" width="100">
+                <template #default="scope">
+                  <el-input v-model="scope.row.stock" type="number" size="small"/>
+                </template>
+              </el-table-column>
+
+              <el-table-column 
+                v-for="(specName, index) in dynamicSpecs" 
+                :key="index" 
+                :label="specName"
+              >
+                <template #default="scope">
+                  <el-input 
+                    v-model="scope.row.tempAttrs[specName]" 
+                    :placeholder="'输入'+specName" 
+                    size="small"
+                  />
+                </template>
+              </el-table-column>
+
+              <el-table-column label="SKU 图片 (首张为默认)" min-width="200">
+                <template #default="scope">
+                  <el-upload
+                    v-model:file-list="scope.row.fileList"
+                    action="#" 
+                    list-type="picture-card"
+                    :http-request="(options) => handleSkuUpload(options, scope.$index)"
+                    :before-upload="beforeAvatarUpload"
+                    :on-remove="(file) => handleRemove(file, scope.$index)"
+                    class="mini-uploader"
+                  >
+                    <el-icon><Plus /></el-icon>
+                  </el-upload>
+                </template>
+              </el-table-column>
+
+              <el-table-column label="操作" width="80" fixed="right">
+                <template #default="scope">
+                  <el-button type="danger" link @click="removeSkuRow(scope.$index)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
           </div>
 
           <div class="form-footer">
@@ -142,9 +203,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-// 【重要】确保你的 api/goods.js 中导出了 getGoodsDetail 和 updateGoods
-import { getCategoryTree, saveGoods, getGoodsDetail, updateGoods } from '../api/goods'
+import { ref, reactive, onMounted, nextTick } from 'vue'
+// 【修正】引入 searchBrand 和 addBrand
+import { getCategoryTree, saveGoods, getGoodsDetail, updateGoods, getBrandList, searchBrand, addBrand,getBrand } from '../api/goods'
 import { uploadFile } from '../api/oss'
 import { ElMessage } from 'element-plus'
 import { useRouter, useRoute } from 'vue-router'
@@ -154,36 +215,46 @@ const router = useRouter()
 const route = useRoute()
 const submitting = ref(false)
 const categoryOptions = ref([])
+const brandOptions = ref([]) 
 const selectedCategory = ref([])
 
-// 编辑模式状态
+// 【关键修复】定义 brandLoading 变量
+const brandLoading = ref(false)
+
 const isEditMode = ref(false)
 const editId = ref(null)
+
+const dynamicSpecs = ref(['颜色', '版本']) 
+const inputVisible = ref(false)
+const inputValue = ref('')
+const InputRef = ref()
 
 const form = reactive({
   spuName: '',
   spuImg: '', 
   spuDescription: '',
   categoryId: null,
-  brandId: 1,
+  brandId: null, 
   weight: 0,
   publishStatus: 1,
   skus: [
     { 
       skuName: '', price: '', stock: '', 
-      color: '', memory: '', 
       fileList: [], 
-      saleAttrs: [] 
+      tempAttrs: { '颜色': '', '版本': '' } 
     }
   ]
 })
 
 onMounted(async () => {
-  // 1. 加载分类树
-  const res = await getCategoryTree()
-  if (res.code === 200) categoryOptions.value = res.data
+  const catRes = await getCategoryTree()
+  if (catRes.code === 200) categoryOptions.value = catRes.data
+  
+  // 页面加载时不自动全量拉取品牌，由用户搜索触发
+  // 或者是预加载一部分热门品牌
+  const brandRes = await searchBrand('') // 查默认前20条
+  if (brandRes.code === 200) brandOptions.value = brandRes.data
 
-  // 2. 检查路由参数，判断是否为编辑模式
   if (route.query.id) {
     isEditMode.value = true
     editId.value = route.query.id
@@ -191,61 +262,106 @@ onMounted(async () => {
   }
 })
 
-// === 数据回显核心逻辑 ===
-const loadGoodsDetail = async (id) => {
-  try {
-    const res = await getGoodsDetail(id)
-    if (res.code === 200) {
-      const spu = res.data.spuInfo
-      const skus = res.data.skuList
-
-      // 1. 回显 SPU 信息
-      form.spuName = spu.spuName
-      form.spuDescription = spu.spuDescription
-      form.categoryId = spu.categoryId
-      form.brandId = spu.brandId
-      form.weight = spu.weight
-      form.publishStatus = spu.publishStatus
-      form.spuImg = spu.spuImg
-
-      // 级联选择器回显 (简化处理：直接赋 ID，如果分类树数据完整，ElementPlus 会自动匹配)
-      if (spu.categoryId) {
-        selectedCategory.value = [spu.categoryId] 
+// === 品牌远程搜索与自动创建逻辑 ===
+const remoteMethod = async (query) => {
+  if (query) {
+    brandLoading.value = true
+    try {
+      const res = await searchBrand(query)
+      if (res.code === 200) {
+        brandOptions.value = res.data
       }
-
-      // 2. 回显 SKU 列表 (最复杂的部分)
-      if (skus && skus.length > 0) {
-        form.skus = skus.map(sku => {
-          // 提取属性：从 saleAttrValues 中找到 "颜色" 和 "版本"
-          const colorAttr = sku.saleAttrValues?.find(a => a.attrName === '颜色')
-          const memoryAttr = sku.saleAttrValues?.find(a => a.attrName === '版本' || a.attrName === '内存')
-
-          // 提取图片：将后端对象转为 ElementPlus 需要的 fileList 格式
-          const fileList = (sku.images || []).map((img, i) => ({
-            name: `img-${i}`,
-            url: img.imgUrl,
-            status: 'success'
-          }))
-
-          return {
-            skuId: sku.skuId, // 【关键】必须保留 ID，后端靠这个判断是更新还是新增
-            skuName: sku.skuName,
-            price: sku.price,
-            stock: sku.stock,
-            color: colorAttr ? colorAttr.attrValue : '',
-            memory: memoryAttr ? memoryAttr.attrValue : '',
-            fileList: fileList,
-            saleAttrs: [] // 提交时会重新生成
-          }
-        })
-      }
-    } else {
-      ElMessage.error('获取商品详情失败')
+    } finally {
+      brandLoading.value = false
     }
-  } catch (error) {
-    console.error(error)
-    ElMessage.error('网络错误，无法加载商品数据')
+  } else {
+    brandOptions.value = []
   }
+}
+
+const handleBrandChange = async (val) => {
+  // 1. 【核心修复】先判断 val 是否等于某个现有选项的 ID
+  // 使用 == 而不是 ===，是为了兼容 ID 可能是数字 1 也可能是字符串 "1" 的情况
+  const existingItem = brandOptions.value.find(item => item.id == val)
+
+  if (existingItem) {
+    // A. 如果在列表里找到了，说明用户是“选中”了现有品牌
+    // 此时什么都不用做，v-model 已经绑定了 ID
+    // console.log('选中了现有品牌:', existingItem.name)
+    return
+  }
+
+  // B. 如果列表里没找到，说明用户输入了“新词”，此时 val 就是用户输入的品牌名
+  // 此时触发创建逻辑
+  if (val) {
+    brandLoading.value = true
+    try {
+      const res = await addBrand(val)
+      if (res.code === 200) {
+        const newBrand = res.data
+        // 1. 把新品牌加到选项列表里，否则下拉框会显示不出来
+        brandOptions.value.push(newBrand)
+        // 2. 将表单绑定的值更新为新品牌的 ID
+        form.brandId = newBrand.id 
+        ElMessage.success(`已自动创建新品牌：${newBrand.name}`)
+      } else {
+        ElMessage.error(res.message || '创建失败')
+        form.brandId = null // 创建失败，清空选择
+      }
+    } catch (e) {
+      console.error(e)
+      ElMessage.error('创建品牌网络异常')
+      form.brandId = null
+    } finally {
+      brandLoading.value = false
+    }
+  }
+}
+
+// === 动态规格逻辑 ===
+const handleCloseSpec = (index) => {
+  const specName = dynamicSpecs.value[index]
+  dynamicSpecs.value.splice(index, 1)
+  form.skus.forEach(sku => {
+    if (sku.tempAttrs && sku.tempAttrs[specName]) {
+      delete sku.tempAttrs[specName]
+    }
+  })
+}
+
+const showInput = () => {
+  inputVisible.value = true
+  nextTick(() => { InputRef.value.focus() })
+}
+
+const handleInputConfirm = () => {
+  if (inputValue.value) {
+    if (!dynamicSpecs.value.includes(inputValue.value)) {
+      dynamicSpecs.value.push(inputValue.value)
+      form.skus.forEach(sku => {
+        if (!sku.tempAttrs) sku.tempAttrs = {}
+        sku.tempAttrs[inputValue.value] = ''
+      })
+    } else {
+      ElMessage.warning('该规格名已存在')
+    }
+  }
+  inputVisible.value = false
+  inputValue.value = ''
+}
+
+const addSkuRow = () => {
+  const newAttrs = {}
+  dynamicSpecs.value.forEach(key => newAttrs[key] = '')
+  form.skus.push({ 
+    skuName: '', price: '', stock: '', 
+    fileList: [], 
+    tempAttrs: newAttrs
+  })
+}
+
+const removeSkuRow = (index) => {
+  form.skus.splice(index, 1)
 }
 
 const beforeAvatarUpload = (rawFile) => {
@@ -284,24 +400,89 @@ const handleSkuUpload = async (options, index) => {
 }
 
 const handleRemove = (uploadFile, index) => {
-  console.log('Remove:', uploadFile, index)
+  console.log('Remove file from sku index:', index)
 }
 
 const handleCategoryChange = (val) => {
   if (val && val.length > 0) form.categoryId = val[val.length - 1]
 }
 
-const addSkuRow = () => {
-  form.skus.push({ 
-    skuName: '', price: '', stock: '', 
-    color: '', memory: '', 
-    fileList: [], 
-    saleAttrs: [] 
-  })
-}
+const loadGoodsDetail = async (id) => {
+  try {
+    const res = await getGoodsDetail(id)
+    if (res.code === 200) {
+      const spu = res.data.spuInfo
+      const skus = res.data.skuList
 
-const removeSkuRow = (index) => {
-  form.skus.splice(index, 1)
+      form.spuName = spu.spuName
+      form.spuDescription = spu.spuDescription
+      form.categoryId = spu.categoryId
+      form.brandId = spu.brandId
+      form.weight = spu.weight
+      form.publishStatus = spu.publishStatus
+      form.spuImg = spu.spuImg
+      if (spu.categoryId) { selectedCategory.value = [spu.categoryId] }
+
+      // 临时处理回显：为了防止显示数字ID，这里可以手动塞一个Mock数据到Options里
+      // 注意：这只是为了不报错，更完美的做法是后端返回 brandName
+      if (spu.brandId) {
+         // 先调用接口查出这个品牌的名字
+        try {
+          const brandRes = await getBrand(spu.brandId)
+          if (brandRes.code === 200 && brandRes.data) {
+            // 将查到的品牌放入选项列表，这样 el-select 就能匹配出名字了
+            brandOptions.value = [brandRes.data]
+            // 然后再赋值 ID
+            form.brandId = spu.brandId
+          }
+        } catch (e) {
+          console.error('品牌回显失败', e)
+        }
+      }
+
+      const allSpecNames = new Set()
+      skus.forEach(sku => {
+        if (sku.saleAttrValues) {
+          sku.saleAttrValues.forEach(attr => allSpecNames.add(attr.attrName))
+        }
+      })
+      if (allSpecNames.size > 0) {
+        dynamicSpecs.value = Array.from(allSpecNames)
+      }
+
+      if (skus && skus.length > 0) {
+        form.skus = skus.map(sku => {
+          const tempAttrs = {}
+          sku.saleAttrValues?.forEach(attr => {
+            tempAttrs[attr.attrName] = attr.attrValue
+          })
+          dynamicSpecs.value.forEach(spec => {
+            if (!tempAttrs[spec]) tempAttrs[spec] = ''
+          })
+
+          const fileList = (sku.images || []).map((img, i) => ({
+            name: `img-${i}`,
+            url: img.imgUrl,
+            status: 'success'
+          }))
+
+          return {
+            skuId: sku.skuId,
+            skuName: sku.skuName,
+            price: sku.price,
+            stock: sku.stock,
+            fileList: fileList,
+            tempAttrs: tempAttrs
+          }
+        })
+      }
+    } else {
+      ElMessage.error('获取商品详情失败')
+    }
+  } catch (error) {
+    console.error(error)
+    ElMessage.error('网络错误，无法加载商品数据')
+  }
 }
 
 const submitForm = async () => {
@@ -310,23 +491,24 @@ const submitForm = async () => {
   submitting.value = true
   try {
     const finalSkus = form.skus.map(sku => {
-      // 1. 提取 URL
+      const saleAttrs = []
+      for (const [key, value] of Object.entries(sku.tempAttrs)) {
+        if (value) {
+          saleAttrs.push({ attrName: key, attrValue: value })
+        }
+      }
+
       const images = sku.fileList
         .filter(f => f.url)
         .map(f => f.url)
 
-      // 2. 组装属性
-      const attrs = []
-      if(sku.color) attrs.push({ attrName: '颜色', attrValue: sku.color })
-      if(sku.memory) attrs.push({ attrName: '版本', attrValue: sku.memory })
-      
       return {
-        skuId: sku.skuId, // 【关键】如果是新加的行，这里是 undefined，后端会识别为 Insert
+        skuId: sku.skuId,
         skuName: sku.skuName,
         price: sku.price,
         stock: sku.stock,
         images: images,
-        saleAttrs: attrs,
+        saleAttrs: saleAttrs,
         defaultImg: images.length > 0 ? images[0] : ''
       }
     })
@@ -335,11 +517,9 @@ const submitForm = async () => {
 
     let res
     if (isEditMode.value) {
-      // === 编辑模式 ===
-      postData.id = editId.value // 必须传 SPU ID
+      postData.id = editId.value
       res = await updateGoods(postData)
     } else {
-      // === 新增模式 ===
       res = await saveGoods(postData)
     }
     
@@ -359,88 +539,26 @@ const submitForm = async () => {
 </script>
 
 <style scoped>
-.publish-page {
-  background: #f5f7fa;
-  min-height: 100vh;
-}
-.simple-header {
-  height: 60px;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-  margin-bottom: 20px;
-}
-.header-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  height: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 20px;
-}
-.logo {
-  font-size: 20px;
-  font-weight: bold;
-  color: #333;
-  cursor: pointer;
-}
-.publish-container {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding-bottom: 50px;
-}
-.form-card {
-  background: #fff;
-  border-radius: 8px;
-  padding: 30px 40px;
-  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05);
-}
+.publish-page { background: #f5f7fa; min-height: 100vh; }
+.simple-header { height: 60px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
+.header-inner { max-width: 1200px; margin: 0 auto; height: 100%; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; }
+.logo { font-size: 20px; font-weight: bold; color: #333; cursor: pointer; }
+.publish-container { max-width: 1200px; margin: 0 auto; padding-bottom: 50px; }
+.form-card { background: #fff; border-radius: 8px; padding: 30px 40px; box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05); }
 .card-header h2 { margin: 0; font-size: 22px; color: #303133; }
 .subtitle { color: #909399; font-size: 13px; margin-top: 5px; display: block; }
-
-.section-title {
-  border-left: 4px solid #409EFF;
-  padding-left: 12px;
-  font-size: 16px;
-  margin: 30px 0 20px;
-  display: flex;
-  justify-content: space-between;
-}
-
-/* SPU 样式 */
-.spu-uploader {
-  border: 1px dashed #d9d9d9;
-  border-radius: 6px;
-  cursor: pointer;
-  position: relative;
-  overflow: hidden;
-  width: 120px;
-  height: 120px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  transition: border-color 0.3s;
-}
+.section-title { border-left: 4px solid #409EFF; padding-left: 12px; font-size: 16px; margin: 30px 0 20px; display: flex; align-items: center; }
+.subtitle-tip { font-size: 12px; color: #999; font-weight: normal; margin-left: 10px; }
+.spu-uploader { border: 1px dashed #d9d9d9; border-radius: 6px; cursor: pointer; position: relative; overflow: hidden; width: 120px; height: 120px; display: flex; justify-content: center; align-items: center; transition: border-color 0.3s; }
 .spu-uploader:hover { border-color: #409EFF; }
 .spu-img { width: 100%; height: 100%; object-fit: cover; }
 .upload-placeholder { display: flex; flex-direction: column; align-items: center; color: #8c939d; font-size: 12px; }
 .tip { font-size: 12px; color: #999; margin-top: 5px; }
-
-/* SKU 卡片样式 */
-.sku-card {
-  background: #fafafa;
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
-  padding: 20px;
-  margin-bottom: 20px;
-  transition: all 0.3s;
-}
-.sku-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.05); border-color: #c0c4cc; }
-.sku-header { display: flex; justify-content: space-between; margin-bottom: 15px; }
-.tag { font-weight: bold; color: #606266; }
-
-.attr-row, .image-row { margin-top: 15px; display: flex; align-items: flex-start; }
-.label { width: 80px; font-size: 14px; color: #606266; padding-top: 6px; }
-
+.spec-setting-area { margin-bottom: 20px; padding: 15px; background: #f9f9f9; border-radius: 4px; }
+.input-new-tag { width: 120px; margin-right: 10px; vertical-align: bottom; }
+.button-new-tag { margin-right: 10px; }
+.sku-actions { margin-bottom: 10px; }
+.mini-uploader :deep(.el-upload--picture-card) { width: 60px; height: 60px; line-height: 60px; }
+.mini-uploader :deep(.el-upload-list--picture-card .el-upload-list__item) { width: 60px; height: 60px; }
 .form-footer { text-align: center; margin-top: 50px; border-top: 1px solid #ebeef5; padding-top: 30px; }
 </style>

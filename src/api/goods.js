@@ -56,3 +56,45 @@ export function getGoodsList(params) {
     params // 会自动序列化为 ?page=1&size=10
   })
 }
+
+// 获取所有品牌
+export function getBrandList() {
+  return request({
+    url: '/brand/list/all',
+    method: 'get'
+  })
+}
+
+// 品牌模糊搜索
+export function searchBrand(keyword) {
+  return request({
+    url: '/brand/search',
+    method: 'get',
+    params: { keyword }
+  })
+}
+
+// 快速添加品牌
+export function addBrand(name) {
+  return request({
+    url: '/brand/add',
+    method: 'post',
+    data: { name }
+  })
+}
+
+// 根据ID获取品牌详情
+export function getBrand(id) {
+  return request({
+    url: `/brand/get/${id}`,
+    method: 'get'
+  })
+}
+
+// 删除商品
+export function deleteGoods(spuId) {
+  return request({
+    url: `/goods/delete/${spuId}`,
+    method: 'delete'
+  })
+}

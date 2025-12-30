@@ -22,7 +22,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="createTime" label="创建时间" width="180" />
-        <el-table-column label="操作" width="250">
+                <el-table-column label="操作" width="250">
           <template #default="scope">
             <el-button size="small" @click="handleEdit(scope.row)">编辑</el-button>
             
@@ -33,6 +33,17 @@
             >
               {{ scope.row.publishStatus === 1 ? '下架' : '上架' }}
             </el-button>
+
+            <el-popconfirm 
+              title="确定要彻底删除该商品吗？此操作不可恢复！"
+              @confirm="handleDelete(scope.row.id)"
+              width="220"
+            >
+              <template #reference>
+                <el-button size="small" type="danger" style="margin-left: 12px">删除</el-button>
+              </template>
+            </el-popconfirm>
+
           </template>
         </el-table-column>
       </el-table>
@@ -54,6 +65,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '../utils/request' // 直接使用 request，也可以封装到 api/goods.js
 import { ElMessage } from 'element-plus'
+import { getMyGoodsList, updateGoodsStatus, deleteGoods } from '../api/goods'
 
 const router = useRouter()
 const loading = ref(false)
@@ -90,6 +102,21 @@ const handleStatus = async (row) => {
     }
   } catch (e) {
     console.error(e)
+  }
+}
+const handleDelete = async (id) => {
+  try {
+    const res = await deleteGoods(id)
+    if (res.code === 200) {
+      ElMessage.success('删除成功')
+      // 重新加载当前页数据
+      loadData(1) 
+    } else {
+      ElMessage.error(res.message || '删除失败')
+    }
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('网络错误')
   }
 }
 </script>
