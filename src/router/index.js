@@ -32,6 +32,13 @@ const routes = [
         name: 'ProductManager',
         component: () => import('../views/ProductManager.vue'),
         meta: { title: '商品管理' }
+      },
+      // 【新增】搜索结果页
+      {
+          path: '/search',
+          name: 'Search',
+          component: () => import('../views/SearchResult.vue'),
+          meta: { title: '搜索结果' }
       }
     ]
   },

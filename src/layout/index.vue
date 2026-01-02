@@ -46,12 +46,19 @@
             <span class="sub-text">极速秒杀</span>
           </div>
         </div>
-
         <div class="search-area">
           <div class="search-box">
-            <input type="text" v-model="keyword" placeholder="搜索好物，快人一步..." @keyup.enter="handleSearch">
-            <button @click="handleSearch">搜 索</button>
-          </div>
+          <el-input
+            v-model="searchKeyword"
+            placeholder="搜索好物 快人一步"
+            class="input-with-select"
+            @keyup.enter="handleSearch"
+          >
+            <template #append>
+              <el-button :icon="Search" @click="handleSearch" />
+            </template>
+          </el-input>
+        </div>
           <div class="hot-words">
             <span>iPhone 15</span>
             <span>RTX 4090</span>
@@ -138,10 +145,18 @@ const handleScroll = () => {
 
 onMounted(() => window.addEventListener('scroll', handleScroll))
 onUnmounted(() => window.removeEventListener('scroll', handleScroll))
-
+import { Search } from '@element-plus/icons-vue'
+const searchKeyword = ref('')
+// 搜索跳转逻辑
 const handleSearch = () => {
-  if (!keyword.value) return
-  ElMessage.info(`搜索: ${keyword.value}`)
+  if (!searchKeyword.value.trim()) {
+    return
+  }
+  // 跳转到搜索页，并携带 keyword 参数
+  router.push({ 
+    path: '/search', 
+    query: { keyword: searchKeyword.value } 
+  })
 }
 
 // 下拉菜单指令处理
