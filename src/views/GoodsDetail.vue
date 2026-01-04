@@ -48,12 +48,37 @@
           </div>
 
           <div class="stock-row">
-            库存: {{ currentSku ? currentSku.stock : '---' }} 件
-            <span v-if="currentSku" class="sku-id-tag">SKU ID: {{ currentSku.skuId }}</span>
+            <div class="count-box">
+              <span class="label">数量：</span>
+              <el-input-number 
+                v-model="buyCount" 
+                :min="1" 
+                :max="currentSku ? currentSku.stock : 1" 
+                size="small"
+                :disabled="!currentSku || currentSku.stock <= 0"
+              />
+              <span class="stock-text" v-if="currentSku">（库存: {{ currentSku.stock }} 件）</span>
+            </div>
+            <div v-if="currentSku" class="sku-id-tag">SKU ID: {{ currentSku.skuId }}</div>
           </div>
 
           <div class="action-btn">
-            <el-button type="danger" size="large" :disabled="!currentSku || currentSku.stock <= 0">
+            <el-button 
+              type="warning" 
+              size="large" 
+              icon="ShoppingCart"
+              @click="handleAddToCart"
+              :disabled="!currentSku || currentSku.stock <= 0"
+            >
+              加入购物车
+            </el-button>
+            
+            <el-button 
+              type="danger" 
+              size="large" 
+              @click="handleBuyNow"
+              :disabled="!currentSku || currentSku.stock <= 0"
+            >
               {{ currentSku ? (currentSku.stock > 0 ? '立即购买' : '缺货') : '请选择规格' }}
             </el-button>
           </div>
@@ -71,11 +96,17 @@
 
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { getGoodsDetail } from '../api/goods'
+// 1. 引入 Store 和 Element组件
+import { useCartStore } from '../store/cart'
 import { ElMessage } from 'element-plus'
+import { ShoppingCart } from '@element-plus/icons-vue'
 
 const route = useRoute()
+const router = useRouter()
+const cartStore = useCartStore() // 初始化 Store
+
 const spuInfo = ref({})
 const skuList = ref([])
 
@@ -84,6 +115,9 @@ const currentSkuImages = ref([])
 
 const selectedSpecs = ref({})
 const specGroups = ref([])
+
+// 【新增】购买数量
+const buyCount = ref(1)
 
 onMounted(async () => {
   const spuId = route.params.id
@@ -99,12 +133,8 @@ const loadData = async (id) => {
     const res = await getGoodsDetail(id)
     if (res.code === 200) {
       spuInfo.value = res.data.spuInfo
-      // 【修复点】这里必须先定义 originSkuList
       const originSkuList = res.data.skuList || []
       
-      // === 【优化开始】预处理 SKU 数据 ===
-      // 我们不仅保存原始数据，还给每个 SKU 加一个 "外挂" map
-      // 以后查属性不用遍历数组，直接 sku._specMap['颜色'] 就能拿到 '红色'
       skuList.value = originSkuList.map(sku => {
         const map = {}
         if (sku.saleAttrValues) {
@@ -114,7 +144,7 @@ const loadData = async (id) => {
         }
         return {
           ...sku,
-          _specMap: map // 挂载这个 map，前缀 _ 表示这是前端生成的辅助字段
+          _specMap: map
         }
       })
       if (spuInfo.value.spuImg) {
@@ -167,31 +197,16 @@ const isSelected = (name, value) => {
   return selectedSpecs.value[name] === value
 }
 
-// === 【修改点 2】核心判读逻辑 ===
-// 判断某个选项是否应该被禁用（即：选了它之后，是否会导致无货或无组合）
 const isSpecDisabled = (specName, specValue) => {
-  // 1. 如果该选项已经被选中，那肯定不禁用
   if (selectedSpecs.value[specName] === specValue) return false
-
-  // 2. 构造一个“假设选中”的规格对象
-  // 也就是说：保持其他行的选中状态不变，把当前行（specName）的值换成 specValue
   const tempSpecs = { ...selectedSpecs.value }
   tempSpecs[specName] = specValue
-
-  // 3. 去 skuList 里搜寻，是否存在满足 tempSpecs 所有条件的 SKU
-  // 并且该 SKU 的库存必须 > 0
   const hasValidSku = skuList.value.some(sku => {
-    // 检查此 SKU 是否包含 tempSpecs 里所有的键值对
     const match = Object.entries(tempSpecs).every(([key, val]) => {
-      // 直接 O(1) 读取！性能提升明显
       return sku._specMap[key] === val
     })
-    
-    // 只有匹配且有库存才算“有效路径”
     return match && sku.stock > 0
   })
-
-  // 如果找不到有效路径，就禁用
   return !hasValidSku
 }
 
@@ -206,8 +221,10 @@ const currentSku = computed(() => {
   })
 })
 
+// 监听 SKU 变化，重置数量
 watch(currentSku, (newSku) => {
   if (newSku) {
+    buyCount.value = 1 // 切换规格时重置数量
     if (newSku.skuDefaultImg) {
       displayImg.value = newSku.skuDefaultImg
     }
@@ -217,6 +234,37 @@ watch(currentSku, (newSku) => {
 
 const setDisplayImg = (url) => {
   displayImg.value = url
+}
+
+// === 【新增】加入购物车逻辑 ===
+const handleAddToCart = async () => {
+  if (!currentSku.value) {
+    ElMessage.warning('请选择完整的商品规格')
+    return
+  }
+  if (currentSku.value.stock <= 0) {
+    ElMessage.warning('该商品暂时缺货')
+    return
+  }
+  
+  // 调用 Store Action (会自动更新右上角小红点)
+  // Store 内部已经处理了 try-catch 和 成功提示
+  await cartStore.addToCart(currentSku.value.skuId, buyCount.value)
+}
+
+// === 【新增】立即购买逻辑 (预留) ===
+const handleBuyNow = () => {
+  if (!currentSku.value) {
+    ElMessage.warning('请选择完整的商品规格')
+    return
+  }
+  // 立即购买的逻辑通常是：先加购物车，然后直接跳转到结算页
+  // 或者跳转到确认订单页带上 skuId
+  ElMessage.info('正在跳转结算页...')
+  // 简单实现：先加购再跳转
+  cartStore.addToCart(currentSku.value.skuId, buyCount.value).then(() => {
+    router.push('/order/confirm') // 这里需要后续实现确认订单页
+  })
 }
 </script>
 
@@ -233,13 +281,16 @@ const setDisplayImg = (url) => {
 .thumb-item { width: 60px; height: 60px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; flex-shrink: 0; }
 .thumb-item.active { border: 2px solid #409EFF; }
 .thumb-item img { width: 100%; height: 100%; object-fit: cover; }
-.sku-box { flex: 1; }
+.sku-box { flex: 1; display: flex; flex-direction: column; } /* 修改为 column 布局 */
 .price-row { color: #f56c6c; font-size: 28px; font-weight: bold; margin-bottom: 20px; }
 .currency { font-size: 18px; margin-right: 4px; }
 .spec-row { margin-bottom: 15px; }
 .spec-name { font-size: 14px; color: #666; margin-bottom: 8px; }
 .spec-values { display: flex; gap: 10px; flex-wrap: wrap; }
-.stock-row { margin-top: 20px; color: #999; font-size: 14px; }
-.sku-id-tag { margin-left: 10px; padding: 2px 6px; background: #f0f2f5; border-radius: 4px; font-size: 12px; }
-.action-btn { margin-top: 30px; }
+.stock-row { margin-top: 20px; color: #666; font-size: 14px; display: flex; align-items: center; gap: 10px; }
+.count-box { display: flex; align-items: center; }
+.label { margin-right: 8px; }
+.stock-text { margin-left: 8px; color: #999; font-size: 12px; }
+.sku-id-tag { padding: 2px 6px; background: #f0f2f5; border-radius: 4px; font-size: 12px; color: #999; }
+.action-btn { margin-top: 30px; display: flex; gap: 15px; } /* 增加 gap */
 </style>

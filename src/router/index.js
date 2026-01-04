@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Layout from '../layout/index.vue'
+import Cart from '../views/Cart.vue'
 
 const routes = [
   // 1. 业务路由组：套用 Layout 布局 (有顶栏和底栏)
@@ -39,7 +40,13 @@ const routes = [
           name: 'Search',
           component: () => import('../views/SearchResult.vue'),
           meta: { title: '搜索结果' }
-      }
+      },
+      {
+          path: '/cart',
+          name: 'Cart',
+          component: Cart,
+          meta: { requiresAuth: true } // 暂时强制登录
+      },
     ]
   },
   

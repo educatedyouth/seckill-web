@@ -23,7 +23,7 @@
               </template>
             </el-dropdown>
             <span class="divider">|</span>
-            <span class="nav-item">我的订单</span>
+            <span class="nav-item" @click="$router.push('/order/list')">我的订单</span>
           </template>
           <template v-else>
             <router-link to="/login" class="nav-item highlight">亲，请登录</router-link>
@@ -79,8 +79,13 @@
             发布商品
           </el-button>
 
-          <el-badge :value="0" class="item">
-            <el-button round size="large">
+          <el-badge 
+            :value="cartStore.cartTotalCount" 
+            :max="99" 
+            :hidden="cartStore.cartTotalCount === 0" 
+            class="item"
+          >
+            <el-button round size="large" @click="$router.push('/cart')">
               <el-icon style="margin-right: 5px"><ShoppingCart /></el-icon>
               我的购物车
             </el-button>
@@ -128,12 +133,17 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useUserStore } from '../store/user'
+// 1. 引入 Cart Store
+import { useCartStore } from '../store/cart'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, ShoppingCart, Upload } from '@element-plus/icons-vue' // 引入 Upload 图标
+import { ArrowDown, ShoppingCart, Upload, Search } from '@element-plus/icons-vue'
 
 const keyword = ref('')
+const searchKeyword = ref('')
 const userStore = useUserStore()
+// 2. 初始化 Cart Store
+const cartStore = useCartStore()
 const router = useRouter()
 const isFixed = ref(false)
 
@@ -143,16 +153,21 @@ const handleScroll = () => {
   isFixed.value = scrollTop > 100
 }
 
-onMounted(() => window.addEventListener('scroll', handleScroll))
+onMounted(() => {
+  window.addEventListener('scroll', handleScroll)
+  // 3. 页面加载时，如果已登录，立即拉取购物车数据以显示小红点
+  if (userStore.token) {
+    cartStore.fetchCartList()
+  }
+})
+
 onUnmounted(() => window.removeEventListener('scroll', handleScroll))
-import { Search } from '@element-plus/icons-vue'
-const searchKeyword = ref('')
+
 // 搜索跳转逻辑
 const handleSearch = () => {
   if (!searchKeyword.value.trim()) {
     return
   }
-  // 跳转到搜索页，并携带 keyword 参数
   router.push({ 
     path: '/search', 
     query: { keyword: searchKeyword.value } 
@@ -163,13 +178,16 @@ const handleSearch = () => {
 const handleCommand = async (command) => {
   if (command === 'logout') {
     await userStore.logout()
+    // 4. 退出登录时重置购物车状态
+    cartStore.$reset()
     ElMessage.success('已安全退出')
     setTimeout(() => location.reload(), 500)
   } else if (command === 'address') {
     router.push('/user/address')
   } else if (command === 'productManager') {
-    // 【新增】跳转到商品管理页
     router.push('/product/manager')
+  } else if (command === 'order') {
+    router.push('/order/list')
   } else {
     ElMessage.info('功能开发中...')
   }
@@ -177,6 +195,7 @@ const handleCommand = async (command) => {
 </script>
 
 <style scoped>
+/* 保持你原有的样式不变 */
 /* --- Top Navigation --- */
 .top-nav {
   height: 32px;

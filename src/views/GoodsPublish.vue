@@ -423,8 +423,6 @@ const loadGoodsDetail = async (id) => {
       form.spuImg = spu.spuImg
       if (spu.categoryId) { selectedCategory.value = [spu.categoryId] }
 
-      // 临时处理回显：为了防止显示数字ID，这里可以手动塞一个Mock数据到Options里
-      // 注意：这只是为了不报错，更完美的做法是后端返回 brandName
       if (spu.brandId) {
          // 先调用接口查出这个品牌的名字
         try {
