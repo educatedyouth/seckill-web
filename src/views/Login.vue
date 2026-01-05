@@ -46,7 +46,8 @@ import { useUserStore } from '../store/user'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue' // 需安装图标库
-
+import { useCartStore } from '../store/cart'
+const cartStore = useCartStore()
 const userStore = useUserStore()
 const router = useRouter()
 const loading = ref(false)
@@ -59,6 +60,8 @@ const handleLogin = async () => {
   const success = await userStore.login(form)
   loading.value = false
   if (success) {
+    // 登录成功后，立即尝试合并离线购物车
+    await cartStore.mergeLocalCart()
     ElMessage.success('欢迎回来')
     router.push('/')
   }

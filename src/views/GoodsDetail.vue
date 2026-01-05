@@ -98,14 +98,13 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getGoodsDetail } from '../api/goods'
-// 1. 引入 Store 和 Element组件
 import { useCartStore } from '../store/cart'
 import { ElMessage } from 'element-plus'
 import { ShoppingCart } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
-const cartStore = useCartStore() // 初始化 Store
+const cartStore = useCartStore()
 
 const spuInfo = ref({})
 const skuList = ref([])
@@ -115,8 +114,6 @@ const currentSkuImages = ref([])
 
 const selectedSpecs = ref({})
 const specGroups = ref([])
-
-// 【新增】购买数量
 const buyCount = ref(1)
 
 onMounted(async () => {
@@ -135,18 +132,26 @@ const loadData = async (id) => {
       spuInfo.value = res.data.spuInfo
       const originSkuList = res.data.skuList || []
       
+      // === 【修复点 1】数据清洗 ===
       skuList.value = originSkuList.map(sku => {
-        const map = {}
-        if (sku.saleAttrValues) {
-          sku.saleAttrValues.forEach(attr => {
-            map[attr.attrName] = attr.attrValue
-          })
+        // 1. 强制空值处理：如果 saleAttrValues 为 null，给个空数组
+        if (!sku.saleAttrValues) {
+          sku.saleAttrValues = []
         }
+
+        // 2. 生成规格 Map
+        const map = {}
+        sku.saleAttrValues.forEach(attr => {
+          map[attr.attrName] = attr.attrValue
+        })
+        
         return {
           ...sku,
           _specMap: map
         }
       })
+
+      // 图片初始化
       if (spuInfo.value.spuImg) {
         displayImg.value = spuInfo.value.spuImg
       } else if (skuList.value.length > 0) {
@@ -154,6 +159,14 @@ const loadData = async (id) => {
       }
 
       extractSpecs(skuList.value)
+      
+      // === 【新增】如果是单品（无规格），默认初始化第一个 SKU 的图片和相册
+      if (specGroups.value.length === 0 && skuList.value.length > 0) {
+          const defaultSku = skuList.value[0]
+          if (defaultSku.skuDefaultImg) displayImg.value = defaultSku.skuDefaultImg
+          currentSkuImages.value = defaultSku.images || []
+      }
+
     } else {
       ElMessage.error(res.message || '加载失败')
     }
@@ -210,21 +223,30 @@ const isSpecDisabled = (specName, specValue) => {
   return !hasValidSku
 }
 
+// === 【修复点 2】修复 currentSku 计算逻辑 ===
 const currentSku = computed(() => {
+  // 情况 A：如果没有规格（单品），直接返回列表里的第一个 SKU
+  if (specGroups.value.length === 0) {
+    return skuList.value.length > 0 ? skuList.value[0] : null
+  }
+
+  // 情况 B：有规格，但还没选完
   if (Object.keys(selectedSpecs.value).length < specGroups.value.length) {
     return null
   }
+
+  // 情况 C：有规格且已选完，进行匹配
   return skuList.value.find(sku => {
+    // 这里因为我们在 loadData 做过清洗，sku.saleAttrValues 必定是数组，不会报错
     return sku.saleAttrValues.every(attr => {
       return selectedSpecs.value[attr.attrName] === attr.attrValue
     })
   })
 })
 
-// 监听 SKU 变化，重置数量
 watch(currentSku, (newSku) => {
   if (newSku) {
-    buyCount.value = 1 // 切换规格时重置数量
+    buyCount.value = 1
     if (newSku.skuDefaultImg) {
       displayImg.value = newSku.skuDefaultImg
     }
@@ -236,7 +258,6 @@ const setDisplayImg = (url) => {
   displayImg.value = url
 }
 
-// === 【新增】加入购物车逻辑 ===
 const handleAddToCart = async () => {
   if (!currentSku.value) {
     ElMessage.warning('请选择完整的商品规格')
@@ -246,24 +267,17 @@ const handleAddToCart = async () => {
     ElMessage.warning('该商品暂时缺货')
     return
   }
-  
-  // 调用 Store Action (会自动更新右上角小红点)
-  // Store 内部已经处理了 try-catch 和 成功提示
   await cartStore.addToCart(currentSku.value.skuId, buyCount.value)
 }
 
-// === 【新增】立即购买逻辑 (预留) ===
 const handleBuyNow = () => {
   if (!currentSku.value) {
     ElMessage.warning('请选择完整的商品规格')
     return
   }
-  // 立即购买的逻辑通常是：先加购物车，然后直接跳转到结算页
-  // 或者跳转到确认订单页带上 skuId
   ElMessage.info('正在跳转结算页...')
-  // 简单实现：先加购再跳转
   cartStore.addToCart(currentSku.value.skuId, buyCount.value).then(() => {
-    router.push('/order/confirm') // 这里需要后续实现确认订单页
+    router.push('/order/confirm')
   })
 }
 </script>

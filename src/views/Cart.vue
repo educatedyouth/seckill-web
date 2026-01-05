@@ -17,8 +17,8 @@
             <div class="goods-info">
               <img :src="scope.row.image" alt="商品图片" class="goods-img"/>
               <div class="goods-detail">
-                <div class="goods-title">{{ scope.row.title || '商品暂无名称' }}</div>
-                <div class="goods-attr">默认规格</div>
+                <div class="goods-title">{{ scope.row.title ||'商品暂无名称' }}</div>
+                <div class="goods-attr">{{ scope.row.skuAttr && scope.row.skuAttr.length > 0 ? scope.row.skuAttr.join('; ') : '标准规格' }}</div>
               </div>
             </div>
           </template>
