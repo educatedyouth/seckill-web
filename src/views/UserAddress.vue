@@ -9,19 +9,29 @@
       </template>
 
       <el-table :data="tableData" stripe style="width: 100%" v-loading="loading">
-        <el-table-column prop="consignee" label="收货人" width="120" />
-        <el-table-column prop="phone" label="手机号" width="140" />
+        <el-table-column prop="receiverName" label="收货人" width="120" />
+        <el-table-column prop="receiverPhone" label="手机号" width="140" />
         <el-table-column label="所在地区" width="180">
           <template #default="scope">
-            {{ scope.row.province }} {{ scope.row.city }} {{ scope.row.district }}
+            {{ scope.row.province }} {{ scope.row.city }} {{ scope.row.area }}
           </template>
         </el-table-column>
         <el-table-column prop="detailAddr" label="详细地址" />
+        
         <el-table-column label="标签" width="100">
           <template #default="scope">
-            <el-tag v-if="scope.row.label" size="small">{{ scope.row.label }}</el-tag>
+            <el-tag v-if="scope.row.label" size="small" :type="getLabelType(scope.row.label)">
+              {{ scope.row.label }}
+            </el-tag>
           </template>
         </el-table-column>
+        
+        <el-table-column label="默认" width="80">
+          <template #default="scope">
+            <el-tag v-if="scope.row.isDefault === 1" type="danger" size="small">默认</el-tag>
+          </template>
+        </el-table-column>
+
         <el-table-column label="操作" width="180">
           <template #default="scope">
             <el-button size="small" @click="openDialog('edit', scope.row)">编辑</el-button>
@@ -38,21 +48,22 @@
     <el-dialog :title="dialogTitle" v-model="dialogVisible" width="500px">
       <el-form :model="form" label-width="80px">
         <el-form-item label="收货人">
-          <el-input v-model="form.consignee" />
+          <el-input v-model="form.receiverName" placeholder="请填写收货人姓名" />
         </el-form-item>
         <el-form-item label="手机号">
-          <el-input v-model="form.phone" />
+          <el-input v-model="form.receiverPhone" placeholder="请填写11位手机号" />
         </el-form-item>
         <el-form-item label="地区">
            <el-row :gutter="10">
              <el-col :span="8"><el-input v-model="form.province" placeholder="省" /></el-col>
              <el-col :span="8"><el-input v-model="form.city" placeholder="市" /></el-col>
-             <el-col :span="8"><el-input v-model="form.district" placeholder="区" /></el-col>
+             <el-col :span="8"><el-input v-model="form.area" placeholder="区/县" /></el-col>
            </el-row>
         </el-form-item>
         <el-form-item label="详细地址">
-          <el-input v-model="form.detailAddr" type="textarea" />
+          <el-input v-model="form.detailAddr" type="textarea" placeholder="街道门牌信息" />
         </el-form-item>
+        
         <el-form-item label="标签">
           <el-radio-group v-model="form.label">
             <el-radio-button label="家" />
@@ -60,6 +71,7 @@
             <el-radio-button label="学校" />
           </el-radio-group>
         </el-form-item>
+        
         <el-form-item>
            <el-checkbox v-model="form.isDefault" :true-label="1" :false-label="0">设为默认地址</el-checkbox>
         </el-form-item>
@@ -82,18 +94,19 @@ import { ElMessage } from 'element-plus'
 const loading = ref(false)
 const tableData = ref([])
 const dialogVisible = ref(false)
-const dialogMode = ref('add') // 'add' or 'edit'
+const dialogMode = ref('add')
 const dialogTitle = ref('新增地址')
 
+// 表单对象 (完全对应后端 UserAddr 字段 + label)
 const form = reactive({
   id: null,
-  consignee: '',
-  phone: '',
+  receiverName: '', // 对应 receiverName
+  receiverPhone: '', // 对应 receiverPhone
   province: '',
   city: '',
-  district: '',
+  area: '',         // 对应 area
   detailAddr: '',
-  label: '家',
+  label: '家',      // 对应 label
   isDefault: 0
 })
 
@@ -115,16 +128,17 @@ const openDialog = (mode, row) => {
   dialogVisible.value = true
   
   if (mode === 'edit' && row) {
-    Object.assign(form, row) // 回显数据
+    // 编辑回显
+    Object.assign(form, row)
   } else {
-    // 重置表单
+    // 新增重置
     form.id = null
-    form.consignee = ''
-    form.phone = ''
+    form.receiverName = ''
+    form.receiverPhone = ''
     form.detailAddr = ''
     form.province = ''
     form.city = ''
-    form.district = ''
+    form.area = ''
     form.label = '家'
     form.isDefault = 0
   }
@@ -159,6 +173,13 @@ const handleDelete = async (id) => {
   } else {
     ElMessage.error(res.message)
   }
+}
+
+const getLabelType = (label) => {
+  if (label === '家') return 'success'
+  if (label === '公司') return 'warning'
+  if (label === '学校') return ''
+  return 'info'
 }
 </script>
 

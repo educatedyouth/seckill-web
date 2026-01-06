@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Layout from '../layout/index.vue'
 import Cart from '../views/Cart.vue'
-
+// 引入新页面
+import OrderConfirm from '../views/OrderConfirm.vue'
 const routes = [
   // 1. 业务路由组：套用 Layout 布局 (有顶栏和底栏)
   {
@@ -47,6 +48,13 @@ const routes = [
           component: Cart,
           meta: { requiresAuth: true } // 暂时强制登录
       },
+      // 【新增】订单确认页
+      {
+          path: '/order/confirm',
+          name: 'OrderConfirm',
+          component: OrderConfirm,
+          meta: { requiresAuth: true, title: '确认订单' }
+      }
     ]
   },
   

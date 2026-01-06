@@ -120,8 +120,18 @@ const handleCheckout = () => {
     ElMessage.warning('请至少选择一件商品')
     return
   }
-  // 跳转到确认订单页 (下一阶段实现)
-  router.push('/order/confirm')
+  
+  // 1. 提取选中商品的 SKU ID
+  const skuIds = cartStore.selectedItems.map(item => item.skuId)
+  
+  // 2. 跳转到订单确认页，并携带 skuIds 参数
+  // 注意：由于 skuIds 是数组，建议 JSON.stringify 后通过 query 传递，或者使用 state (Vue Router 4)
+  router.push({
+    path: '/order/confirm',
+    query: {
+      skuIds: JSON.stringify(skuIds) // 简单粗暴传参
+    }
+  })
 }
 </script>
 
